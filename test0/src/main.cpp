@@ -50,7 +50,7 @@ namespace kernels
 float apply_kernel(
    const float* input,
    const std::vector<float>& kernel,
-   int row, int col, int img_rows, 
+   int row, int col, int step, 
    int kernel_size
 ){
    int k_ind{0};
@@ -60,70 +60,173 @@ float apply_kernel(
       for (int j{-kernel_size / 2}; j <= (kernel_size / 2); ++j)
       {
          // The operation should be done on images with range [0,1]
-         sum += kernel[k_ind] * (input[(row + i) * img_rows + (col + j)]);
+         sum += kernel[k_ind] * (input[step * (row + i) + (col + j)]);
          ++k_ind;
       }
    }
    return sum;
 }
 
-void apply_filter(
+void apply_filter_lowpass(
    float* output,
    float* input,
    std::vector<float>& kernel,
-   int img_cols, int img_rows, 
+   int img_rows, int img_cols, 
    int kernel_size
 ){
-   for (int row{kernel_size / 2}; row < (img_cols - kernel_size / 2); ++row)
+   for (int row{kernel_size / 2}; row < (img_rows - kernel_size / 2); ++row)
    {
-      for (int col{kernel_size / 2}; col < (img_rows - kernel_size / 2); ++col)
+      for (int col{kernel_size / 2}; col < (img_cols - kernel_size / 2); ++col)
       {
-         output[img_rows * row + col] = apply_kernel(input, kernel, row, col, img_rows, kernel_size);
+         output[img_cols * row + col] = apply_kernel(input, kernel, row, col, img_cols, kernel_size);
+//         std::cout << row << ' ' << col << ' ' << output[img_rows * row + col] << '\n';
       }
    }
 }
 
-// Interface
+void apply_filter_highpass(
+   float* output,
+   float* input,
+   std::vector<float>& kernel,
+   int img_rows, int img_cols, 
+   int kernel_size
+){
+   for (int row{kernel_size / 2}; row < (img_rows - kernel_size / 2); ++row)
+   {
+      for (int col{kernel_size / 2}; col < (img_cols - kernel_size / 2); ++col)
+      {
+         output[img_rows * row + col] = input[img_rows * row + col] - apply_kernel(input, kernel, row, col, img_rows, kernel_size);
+      }
+   }
+}
 
+void local_variance_norm(
+   float* output,
+   float* input,
+   float* buffer,
+   int img_rows, int img_cols, 
+   int kernel_size,
+   float sigma1,
+   float sigma2
+){
+   auto GKernel1 = kernels::gaussian(kernel_size, sigma1);
+   auto GKernel2 = kernels::gaussian(kernel_size, sigma2);
+   int k_ind{0}, den{0};
+   float sum{0}, invalid_denom{0.f};
+   
+   apply_filter_highpass(
+      buffer,
+      input, 
+      GKernel1,
+      img_cols, img_rows,
+      kernel_size
+   );
+   
+   for (int row{kernel_size / 2}; row < (img_rows - kernel_size / 2); ++row)
+   {
+      for (int col{kernel_size / 2}; col < (img_cols - kernel_size / 2); ++col)
+      {
+         sum = 0;
+         k_ind = 0;
+         for (int i{-kernel_size / 2}; i <= (kernel_size / 2); ++i)
+         {
+            for (int j{-kernel_size / 2}; j <= (kernel_size / 2); ++j)
+            {
+               // The operation should be done on images with range [0,1]
+               sum += GKernel2[k_ind] * pow(buffer[img_rows * (row + i) + (col + j)], 2);
+               ++k_ind;
+            }
+         }
+         den = pow(sum, 0.5);
+         output[img_rows * row + col] = (den != invalid_denom) ? (buffer[img_rows * row + col] / den) : 0;
+      }
+   }  
+}
+std::function<std::vector<float>(int, float)> get_kernel_type(std::string kernel_s)
+{
+   if (kernel_s == "gaussian")
+      return &kernels::gaussian;
+   else
+      std::runtime_error("Invalid kernel type. Supported kernels: 'gaussian'");
+}
+
+// Interface
 namespace py = pybind11;
 
 // wrap C++ function with NumPy array IO
-py::object wrapper(
-   py::array_t<float> output,
+py::array_t<float> apply_conv_filter_wrapper(
    py::array_t<float> input,
    int kernel_size = 3,
    float sigma = 1
 ){
    // check input dimensions
-   if ( output.ndim() != 2 )
-      throw std::runtime_error("Ouput should be 2-D NumPy array");
-   if ( input.ndim() != output.ndim() )
+   if ( input.ndim() != 2 )
       throw std::runtime_error("Input should be 2-D NumPy array");
 
-   auto buf1 = output.request();
-   auto buf2 = input.request();
-   if (buf1.size != buf2.size) 
-      throw std::runtime_error("sizes do not match!");
-
+   auto buf1 = input.request();
+   
    int N = input.shape()[0], M = input.shape()[1];
 
-   float* ptr_out = (float*) buf1.ptr;
-   float* ptr_in = (float*) buf2.ptr;
-
-   auto GKernel = kernels::gaussian(kernel_size, sigma);
+   py::array_t<float> result = py::array_t<float>(buf1.size);
+   auto buf2 = result.request();
    
+   float* ptr_in  = (float*) buf1.ptr;
+   float* ptr_out = (float*) buf2.ptr;
+
+   auto GKernel = get_kernel_type("gaussian")(kernel_size, sigma);
+//   std::cout << N << ' ' << M << '\n';
    // call pure C++ function
-   apply_filter(
+   apply_filter_lowpass(
       ptr_out,
       ptr_in,
       GKernel,
       N, M, 
       kernel_size
    );
-   return py::cast<py::none>(Py_None);
+   result.resize({N,M});
+   return result;
 }
 
-PYBIND11_MODULE(example_filters,m) {
-  m.doc() = "Bindings for convolution filters written in c++.";
-  m.def("gaussian_filter", &wrapper, "Apply a gaussian filter to a 2D array");
+py::array_t<float> local_variance_norm_wrapper(
+   py::array_t<float> input,
+   int kernel_size = 3,
+   float sigma1 = 2,
+   float sigma2 = 2
+){
+   // check input dimensions
+   if ( input.ndim() != 2 )
+      throw std::runtime_error("Ouput should be 2-D NumPy array");
+
+   auto buf1 = input.request();
+
+   int N = input.shape()[0], M = input.shape()[1];
+   
+   py::array_t<float> result = py::array_t<float>(buf1.size);
+   auto buf2 = result.request();
+   
+   py::array_t<float> temp_buffer = py::array_t<float>(buf1.size);
+   auto buf3 = temp_buffer.request();
+   
+   float* ptr_out = (float*) buf2.ptr;
+   float* ptr_in  = (float*) buf1.ptr;
+   float* ptr_buf = (float*) buf3.ptr;
+   
+   // call pure C++ function
+   local_variance_norm(
+      ptr_out,
+      ptr_in,
+      ptr_buf,
+      N, M, 
+      kernel_size,
+      sigma1,
+      sigma2
+   );
+   result.resize({N,M});
+   return result;
+}
+
+PYBIND11_MODULE(example_filters_bindings,m) {
+   m.doc() = "Bindings for convolution filters written in c++.";
+   m.def("gaussian_filter", &apply_conv_filter_wrapper, "Apply a gaussian filter to a 2D array");
+   m.def("local_variance_normalization", &local_variance_norm_wrapper, "Apply a local variance normalization filter to a 2D array");
 }
