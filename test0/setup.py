@@ -1,29 +1,90 @@
 import sys
 from glob import glob
+from os.path import dirname, join
 
-#from pybind11 import get_cmake_dir
-# Available at setup time due to pyproject.toml
-from pybind11.setup_helpers import Pybind11Extension, build_ext
-from setuptools import setup
+import pybind11
+import tempfile
 
-__version__ = "0.0.1"
+import setuptools
+from setuptools import setup, find_packages, Extension
+from setuptools.command.build_ext import build_ext
 
+try:
+    from setuptools.errors import CompileError, LinkError
+except ImportError:
+    from distutils.errors import CompileError, LinkError
+    
+__version__ = "0.0.2"
+
+project_name = "example_filters_bindings"
+
+base_path = dirname(__file__)
 
 ext_modules = [
-    Pybind11Extension("example_filters_bindings",
-        sorted(glob("src/*.cpp")),
-        #include_dirs=sorted(glob("src/*.h")),
+    Extension(
+        project_name,
+        sorted(glob(join(base_path, "src", "*.cpp"))),
+        include_dirs=[pybind11.get_include(), join(base_path, "include")],
+        language = "c++"
         ),
 ]
 
+def has_flag(compiler, flagname):
+    with tempfile.NamedTemporaryFile('w', suffix='.cpp') as f:
+        f.write('int main (int argc, char **argv) { return 0; }')
+        try:
+            compiler.compile([f.name], extra_postargs=[flagname])
+        except CompileError:
+            return False
+    return True
+
+def cpp_flag(compiler):
+    """Return the -std=c++[11/14] compiler flag"""
+    if has_flag(compiler, '-std=c++14'):
+        return '-std=c++14'
+    elif has_flag(compiler, '-std=c++11'):
+        return '-std=c++11'
+    else:
+        raise RuntimeError('Unsupported compiler -- at least C++11 support is needed!')
+        
+class BuildExt(build_ext):
+    c_opts = {
+        'msvc': ['/EHsc'],
+        'unix': [],
+    }
+
+    if sys.platform == 'darwin':
+        c_opts['unix'] += ['-stdlib=libc++', '-mmacosx-version-min=10.7']
+
+    def build_extensions(self):
+        compiler_type = self.compiler.compiler_type
+        opts = self.c_opts.get(compiler_type, [])
+        if compiler_type == 'unix':
+            opts.append(cpp_flag(self.compiler))
+            if has_flag(self.compiler, '-fvisibility=hidden'):
+                opts.append('-fvisibility=hidden')
+                
+        for ext in self.extensions:
+            ext.extra_compile_args = opts
+        build_ext.build_extensions(self)
+            
+    
 setup(
-    name="example_filters_bindings",
+    name=project_name,
     version=__version__,
     author="Erich Zimmer",
     author_email="erich_zimmer@hotmail.com",
-    url="",
+    #url="",
     description="A test project using pybind11",
     long_description="",
+    setup_requires=[
+        "setuptools",
+    ],
+    install_requires=[
+        "numpy",
+        "pybind11"
+    ],
+    packages=find_packages(where="./example_preproc_filters"),
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
     zip_safe=False,
