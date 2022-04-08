@@ -14,17 +14,20 @@ try:
 except ImportError:
     from distutils.errors import CompileError, LinkError
     
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
-project_name = "example_filters_bindings"
-
+project_name = "piv_filters"
+ 
 base_path = dirname(__file__)
+
+with open(join(base_path, "README.md"), encoding = "utf-8") as f:
+    long_desciption = f.read()
 
 ext_modules = [
     Extension(
-        project_name,
-        sorted(glob(join(base_path, "src", "*.cpp"))),
-        include_dirs=[pybind11.get_include(), join(base_path, "include")],
+        project_name + "_core",
+        sorted(glob(join(base_path, project_name+"/core/src", "*.cpp"))),
+        include_dirs=[pybind11.get_include(), join(base_path, project_name+"/core/include")],
         language = "c++"
         ),
 ]
@@ -74,9 +77,10 @@ setup(
     version=__version__,
     author="Erich Zimmer",
     author_email="erich_zimmer@hotmail.com",
-    #url="",
     description="A test project using pybind11",
-    long_description="",
+    long_description=long_desciption,
+    long_description_content_type="text/markdown",
+    include_package_data=True,
     setup_requires=[
         "setuptools",
     ],
@@ -84,7 +88,7 @@ setup(
         "numpy",
         "pybind11"
     ],
-    packages=find_packages(where="./example_preproc_filters"),
+    packages=find_packages(where="./piv_filters/filters"),
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
     zip_safe=False,

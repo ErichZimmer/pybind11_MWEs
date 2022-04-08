@@ -1,0 +1,6 @@
+include *.txt
+include *.md
+
+recursive-include piv_filters/filters *.py
+recursive-include piv_filters/core/include/lib *.h
+recursive-include piv_filters/core/src *.cpp

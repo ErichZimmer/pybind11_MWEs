@@ -3,7 +3,7 @@
 
 #include <vector>
 
-void apply_filter_lowpass(
+void apply_kernel_lowpass(
    float*,
    float*,
    std::vector<float>&,
@@ -11,12 +11,13 @@ void apply_filter_lowpass(
    int
 );
 
-void apply_filter_highpass(
+void apply_kernel_highpass(
    float*,
    float*,
    std::vector<float>&,
    int, int, 
-   int
+   int,
+   bool
 );
 
 void local_variance_norm(
