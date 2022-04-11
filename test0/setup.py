@@ -14,7 +14,7 @@ try:
 except ImportError:
     from distutils.errors import CompileError, LinkError
     
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 project_name = "piv_filters"
  

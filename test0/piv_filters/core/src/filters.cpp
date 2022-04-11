@@ -4,8 +4,46 @@
 #include <iomanip>
 #include <iterator>
 #include <functional>
+#include <numeric>
 
 #include "lib/kernels.h"
+
+void intensity_cap_filter(
+   float* output,
+   float* input,
+   int N_M,
+   float std_mult
+){
+   float sum{}, mean{}, std_{}, upper_limit{};
+   
+   // calculate mean and std
+   for (int i{}; i < N_M; ++i)
+   {
+      sum += input[i];
+      std_ += input[i]*input[i]; // temp
+   }
+   mean = sum / N_M;
+   std_ = sqrt( (std_ / N_M) + (mean*mean) - (2*mean*mean) );
+   
+   // calculate cap
+   upper_limit = mean + std_mult * std_;
+   
+   // perform intensity capping
+   for (int i{}; i < N_M; ++i)
+      output[i] = (input[i] < upper_limit) ? input[i] : upper_limit;
+}
+
+void binarize_filter(
+   float* output,
+   float* input,
+   int N_M,
+   float threshold
+){
+   
+   // perform binarization, assuming pixel intensity range of [0..1]
+   for (int i{}; i < N_M; ++i)
+      output[i] = (input[i] > threshold) ? 1.f : 0.f;
+}
 
 void apply_kernel_lowpass(
    float* output,
@@ -57,15 +95,17 @@ void local_variance_norm(
    int img_rows, int img_cols, 
    int kernel_size,
    float sigma1,
-   float sigma2
+   float sigma2,
+   bool clip_at_zero = false
 ){
    /*
    Calculate variance and mean via two gaussian filters and normalize the array.
    */
    auto GKernel1 = kernels::gaussian(kernel_size, sigma1);
    auto GKernel2 = kernels::gaussian(kernel_size, sigma2);
+   
    int k_ind{0}, step{ img_cols };
-   float sum{0.f}, den{0.f}, invalid_denom{0.f};
+   float sum{0.f}, den{0.f}, invalid_set{0.f};
    
    // highpass
    apply_kernel_highpass(buffer, input, GKernel1, img_cols, img_rows, kernel_size, false);
@@ -87,7 +127,7 @@ void local_variance_norm(
             }
          }
          den = pow(sum, 0.5f);
-         output[step * row + col] = (den != invalid_denom) ? (buffer[step * row + col] / den) : 0;
+         output[step * row + col] = (den != invalid_set) ? (buffer[step * row + col] / den) : 0;
       }
    }  
    
@@ -98,4 +138,14 @@ void local_variance_norm(
    
    for (int i{ 0 }; i < (img_rows * img_cols); ++i)
       output[i] /= max_val;
+      
+  // clip pixel values less than zero if necessary
+   if (clip_at_zero) 
+   {
+      for (int i{ 0 }; i < (img_rows * img_cols); ++i)
+      {
+         if (output[i] < invalid_set)
+            output[i] = invalid_set;
+      } 
+   }    
 }

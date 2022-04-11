@@ -3,6 +3,20 @@
 
 #include <vector>
 
+void intensity_cap_filter(
+   float*,
+   float*,
+   int,
+   float
+);
+
+void binarize_filter(
+   float*,
+   float*,
+   int,
+   float
+);
+
 void apply_kernel_lowpass(
    float*,
    float*,
@@ -27,7 +41,8 @@ void local_variance_norm(
    int, int, 
    int,
    float,
-   float
+   float,
+   bool
 );
 
 #endif
