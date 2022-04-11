@@ -8,7 +8,7 @@ from numpy import pad as pad_array, percentile
 
 kernel_size_error = "kernel_size must be an odd number"
 
-def instensity_cap(img, std_mult = 2.0):
+def intensity_cap(img, std_mult = 2.0):
     """
     Set pixels higher than calculated threshold to said threshold. 
     The threshold value is calcualted by img_mean + std_mult * img_std.
@@ -313,7 +313,7 @@ def variance_normalization_filter(img, kernel_size=3, sigma1=1.0, sigma2=1.0, cl
     return new_img
 
 
-try
+try:
     from skimage.exposure import rescale_intensity
     def contrast_stretch(img, lower_limit = 2, upper_limit = 98):
         """

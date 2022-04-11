@@ -15,7 +15,7 @@ namespace py = pybind11;
 
 // wrap C++ function with NumPy array IO
 
-py::array_t<float> intensity_cap_wrapper(intensity_binarize_wrapper
+py::array_t<float> intensity_cap_wrapper(
    py::array_t<float> input,
    float std_mult = 2.f
 ){
