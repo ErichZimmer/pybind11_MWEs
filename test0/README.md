@@ -1,11 +1,12 @@
-## Convolution kernels test
-Example if an implemetation of convolution kernels for image filters. The filters assume the image will be padded by half the width of the kernel size and normalized to [0, 1] 32 bit float.
+## Particle Image Velocimetry (PIV) filters
 
-## To-Do:
-- [x] Breakdown main to several files
+PIV filters is a package that consists of filters to enhance image wuality of PIV image pairs.
 
-- [ ] Add more convolution filters
+## Warning
+This repository is a test for learning how to use pybind11/c++11. Bugs are common and the API consistently changes.
 
-- [x] Make header files work
+## Installing
+Download (or git-clone) repository and install it with your perferable method.
 
-- [ ] wrap most preprocessing filters from openPIV/preprocessing
+## Docs
+Only docs available is through python's `help()` function.
