@@ -4,8 +4,7 @@ Module for filtering Particle Image Velocimetry (PIV) images to attain a higher 
 from piv_filters_core import _intensity_cap, _threshold_binarization,\
     _gaussian_lowpass_filter, _gaussian_highpass_filter, _local_variance_normalization,\
     _test_wrapper
-from numpy import pad as pad_array, percentile
-
+from numpy import pad as pad_array, percentile, clip
 kernel_size_error = "kernel_size must be an odd number"
 
 def intensity_cap(img, std_mult = 2.0):
@@ -313,39 +312,66 @@ def variance_normalization_filter(img, kernel_size=3, sigma1=1.0, sigma2=1.0, cl
     return new_img
 
 
-try:
-    from skimage.exposure import rescale_intensity
-    def contrast_stretch(img, lower_limit = 2, upper_limit = 98):
-        """
-        Simple percentile-based contrast stretching.
+def contrast_stretch(img, lower_limit = 2, upper_limit = 98):
+    """
+    Simple percentile-based contrast stretching.
 
-        Parameters
-        ----------
+    Parameters
+    ----------
 
-        img : 2d np.ndarray
-            a two dimensional array containing pixel intenensities.
+    img : 2d np.ndarray
+        a two dimensional array containing pixel intenensities.
 
-        lower_limit: int
-            lower percentile limit
+    lower_limit: int
+        lower percentile limit
 
-        upper_limit: int
-            upper percentile limit
+    upper_limit: int
+        upper percentile limit
 
-        Returns
-        -------
-        img: image
-            a filtered two dimensional array of the input image  
-        """
-        if lower_limit < 0:
-            lower_limit = 0
-        if upper_limit > 100:
-            upper_limit = 100
+    Returns
+    -------
+    img: image
+        a filtered two dimensional array of the input image  
+    """
+    if lower_limit < 0:
+        lower_limit = 0
+    if upper_limit > 100:
+        upper_limit = 100
 
-        lower = percentile(img, lower_limit)
-        upper = percentile(img, upper_limit)
-        img = rescale_intensity(img, in_range = (lower, upper))
-        return img
-    
-    print("Loaded rescale_intensity function")
-except ImportError:
-    pass
+    img_dtype = img.dtype
+    img_max = img.max()
+
+    if img_dtype != "float32":
+        img = img.astype("float32")
+
+    if img_max > 1:
+        img /= img_max
+
+    lower = percentile(img, lower_limit)
+    upper = percentile(img, upper_limit)
+
+    img_max = img.max()
+    img_min = img.min()
+
+    img = clip(img, lower, upper)
+    img = (img - lower) / (upper - lower)
+
+    stretch_min = 0
+    if img_max < 1:
+        stretch_max = 1
+    elif img_max < 2**8 - 1:
+        stretch_max = 2**8 - 1
+    elif img_max < 2**10 - 1:
+        stretch_max = 2**10 - 1
+    elif img_max < 2**12 - 1:
+        stretch_max = 2**12 - 1
+    elif img_max < 2**14 - 1:
+        stretch_max = 2**14 - 1
+    else:
+        stretch_max = 2**16 - 1
+
+    if img_dtype != "float32":
+        img = img.astype("float32")
+    img *= stretch_max
+
+    return img.astype(img_dtype)
