@@ -1,36 +1,54 @@
 #include <cmath>
-#include <iostream>
 #include <vector>
-#include <iomanip>
 #include <iterator>
 #include <functional>
 #include <numeric>
+#include <cstdint>
 
 #include "lib/kernels.h"
+#include "lib/utils.h"
+
+void parallel_bulk( // for future parallel
+   std::function<void(std::size_t)>& lambda, 
+   std::size_t img_rows,
+   std::size_t kernel_size,
+   std::size_t thread_count = 4
+){
+   /* Perform bulk processing due to costs of creating/maintaining queues */
+   // get chunk size and starting row
+   std::size_t chunk_size = img_rows/thread_count, row = kernel_size / 2;
+   // allocate vector of shuck sizes
+   std::vector<size_t> chunk_sizes( thread_count, chunk_size );
+   // fix rounding errors to remove undefined behavior
+   chunk_sizes.back() = (img_rows - 2*(kernel_size / 2) - (thread_count-1)*chunk_size);
+      
+   for ( const auto& chunk_size_ : chunk_sizes )
+   {
+      auto processor = [row, chunk_size_, &lambda] ()
+      {
+         for ( std::size_t j=row; j<row + chunk_size_; ++j )
+            lambda(j);
+      };
+      processor(); // would be multi-threaded later...
+      row += chunk_size_;
+   }
+}
 
 void intensity_cap_filter(
-   float* output,
    float* input,
    int N_M,
-   float std_mult
+   float std_mult = 2.f
 ){
-   float sum{}, mean{}, std_{}, upper_limit{};
+   float upper_limit{};
    
    // calculate mean and std
-   for (int i{}; i < N_M; ++i)
-   {
-      sum += input[i];
-      std_ += input[i]*input[i]; // temp
-   }
-   mean = sum / N_M;
-   std_ = sqrt( (std_ / N_M) + (mean*mean) - (2*mean*mean) );
-   
+   auto mean_std{ buffer_mean_std(input, N_M) };
+      
    // calculate cap
-   upper_limit = mean + std_mult * std_;
+   upper_limit = mean_std[0] + std_mult * mean_std[1];
    
    // perform intensity capping
-   for (int i{}; i < N_M; ++i)
-      output[i] = (input[i] < upper_limit) ? input[i] : upper_limit;
+   buffer_clip(input, 0.f, upper_limit, N_M);
 }
 
 void binarize_filter(
@@ -54,14 +72,34 @@ void apply_kernel_lowpass(
 ){
    int step{ img_cols };
    
-   for (int row{kernel_size / 2}; row < (img_rows - kernel_size / 2); ++row)
+   // setup lambda function for column processing
+   auto process_row = [
+      output, 
+      input,
+      &kernel,
+      &img_cols, 
+      &step, 
+      &kernel_size
+   ]( int _row ) mutable 
    {
-      for (int col{kernel_size / 2}; col < (img_cols - kernel_size / 2); ++col)
-      {
-         output[step * row + col] = kernels::apply_kernel(input, kernel, row, col, step, kernel_size);
-      }
-   }
+      for (int col{kernel_size / 2}; col < (img_cols - kernel_size / 2); ++col)        
+         output[step * _row + col] = kernels::apply_conv_kernel(
+            input, 
+            kernel,
+            _row, col, step, 
+            kernel_size
+         );         
+   };
+   
+   // process rows in parallel
+   parallel_bulk(
+      process_row, 
+      img_rows,
+      kernel_size,
+      4 // temp
+  );
 }
+
 
 void apply_kernel_highpass(
    float* output,
@@ -72,20 +110,37 @@ void apply_kernel_highpass(
    bool clip_at_zero = false
 ){   
    int step{ img_cols };
-   float den{ 0.f }, invalid_set{ 0.f };
    
-   for (int row{kernel_size / 2}; row < (img_rows - kernel_size / 2); ++row)
+   // setup lambda function for column processing
+   auto process_row = [
+      output, 
+      input,
+      &kernel,
+      &img_cols, 
+      &step, 
+      &kernel_size
+   ]( int _row ) mutable
    {
-      for (int col{kernel_size / 2}; col < (img_cols - kernel_size / 2); ++col)
-      {         
-         den = input[step * row + col] - kernels::apply_kernel(input, kernel, row, col, step, kernel_size);
-         
-         if(clip_at_zero && (den < invalid_set)) // clip invalid pixels
-            den = invalid_set;
-         
-         output[step * row + col] = den;
-      }
-   }
+      for (int col{kernel_size / 2}; col < (img_cols - kernel_size / 2); ++col)        
+         output[step * _row + col] = input[step * _row + col] - kernels::apply_conv_kernel(
+            input, 
+            kernel,
+            _row, col, step, 
+            kernel_size
+         );         
+   };
+   
+   // process rows in parallel
+   parallel_bulk(
+      process_row, 
+      img_rows,
+      kernel_size,
+      4 // temp
+  );
+}
+   // clip pixel values less than zero if necessary
+   if (clip_at_zero) 
+      buffer_clip(output, 0.f, 1.f, img_rows * img_cols);
 }
 
 void local_variance_norm(
@@ -132,20 +187,11 @@ void local_variance_norm(
    }  
    
    // normalize
-   float max_val{ 0.f };
-   for (int i{ 0 }; i < (img_rows * img_cols); ++i)
-      max_val = (output[i] > max_val) ? output[i] : max_val;
-   
-   for (int i{ 0 }; i < (img_rows * img_cols); ++i)
-      output[i] /= max_val;
-      
-  // clip pixel values less than zero if necessary
+   buffer_p_norm(output, img_rows * img_cols);
+     
+   // clip pixel values less than zero if necessary
    if (clip_at_zero) 
    {
-      for (int i{ 0 }; i < (img_rows * img_cols); ++i)
-      {
-         if (output[i] < invalid_set)
-            output[i] = invalid_set;
-      } 
-   }    
+      buffer_clip(output, 0.f, 1.f, img_rows * img_cols);
+   }     
 }

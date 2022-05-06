@@ -14,7 +14,7 @@ try:
 except ImportError:
     from distutils.errors import CompileError, LinkError
     
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 
 project_name = "piv_filters"
  
@@ -32,6 +32,7 @@ ext_modules = [
         ),
 ]
 
+
 def has_flag(compiler, flagname):
     with tempfile.NamedTemporaryFile('w', suffix='.cpp') as f:
         f.write('int main (int argc, char **argv) { return 0; }')
@@ -41,6 +42,7 @@ def has_flag(compiler, flagname):
             return False
     return True
 
+
 def cpp_flag(compiler):
     """Return the -std=c++[11/14] compiler flag"""
     if has_flag(compiler, '-std=c++14'):
@@ -49,6 +51,7 @@ def cpp_flag(compiler):
         return '-std=c++11'
     else:
         raise RuntimeError('Unsupported compiler -- at least C++11 support is needed!')
+        
         
 class BuildExt(build_ext):
     c_opts = {
@@ -77,6 +80,7 @@ setup(
     version=__version__,
     author="Erich Zimmer",
     author_email="erich_zimmer@hotmail.com",
+    url="https://github.com/ErichZimmer/pybind11_MWEs/tree/main/test0",
     description="A test project using pybind11",
     long_description=long_desciption,
     long_description_content_type="text/markdown",
@@ -88,9 +92,9 @@ setup(
         "numpy",
         "pybind11"
     ],
-    packages=find_packages(where="./piv_filters/filters"),
+    packages=find_packages(exclude = ["piv_filters/core",]),
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
     zip_safe=False,
-    python_requires=">=3.6",
+    python_requires=">=3.8",
 )

@@ -5,7 +5,6 @@
 
 void intensity_cap_filter(
    float*,
-   float*,
    int,
    float
 );

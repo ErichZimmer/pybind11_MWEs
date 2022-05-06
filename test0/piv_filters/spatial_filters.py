@@ -5,6 +5,7 @@ from piv_filters_core import _intensity_cap, _threshold_binarization,\
     _gaussian_lowpass_filter, _gaussian_highpass_filter, _local_variance_normalization,\
     _test_wrapper
 from numpy import pad as pad_array, percentile, clip
+
 kernel_size_error = "kernel_size must be an odd number"
 
 def intensity_cap(img, std_mult = 2.0):

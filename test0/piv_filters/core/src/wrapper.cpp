@@ -1,5 +1,4 @@
 #include <cmath>
-#include <iostream>
 #include <vector>
 #include <iomanip>
 
@@ -27,16 +26,14 @@ py::array_t<float> intensity_cap_wrapper(
    
    int N = input.shape()[0], M = input.shape()[1];
 
-   py::array_t<float> result = py::array_t<float>(buf1.size);
+   py::array_t<float> result = py::array_t<float>(buf1);
    auto buf2 = result.request();
    
-   float* ptr_in  = (float*) buf1.ptr;
    float* ptr_out = (float*) buf2.ptr;
    
    // call pure C++ function
    intensity_cap_filter(
       ptr_out,
-      ptr_in,
       N*M, 
       std_mult
    );
@@ -247,37 +244,44 @@ PYBIND11_MODULE(piv_filters_core,m) {
    
    m.def("_test_wrapper",
       &test_wrapper, 
-      "Test wrapper by multiplying a scalar to an array."
+      "Test wrapper by multiplying a scalar to an array.",
+      py::arg("input"),
+      py::arg("testConst") = 5
    );
    m.def("_intensity_cap", 
       &intensity_cap_wrapper,
-      "Apply an intensity cap filter to a 2D array"
-//       py::arg("std_mult") = 2.f
+      "Apply an intensity cap filter to a 2D array",
+       py::arg("input"),
+       py::arg("std_mult") = 2.f
    );
    m.def("_threshold_binarization", 
       &intensity_binarize_wrapper,
-      "Apply an binarization filter to a 2D array"
-//       py::arg("threshold") = 2.f
+      "Apply an binarization filter to a 2D array",
+       py::arg("input"),
+       py::arg("threshold") = 0.5f
    );
    m.def("_gaussian_lowpass_filter", 
       &low_pass_filter_wrapper,
-      "Apply a gaussian low pass filter to a 2D array"
-//       py::arg("kernel_size") = 3, 
-//       py::arg("sigma") = 1
+      "Apply a gaussian low pass filter to a 2D array",
+       py::arg("input"),
+       py::arg("kernel_size") = 3, 
+       py::arg("sigma") = 1
    );
    m.def("_gaussian_highpass_filter", 
       &high_pass_filter_wrapper,
-      "Apply a gaussian high pass filter to a 2D array"
-//      py::arg("kernel_size") = 3, 
-//      py::arg("sigma") = 1,
-//      py::arg("clip_at_zero") = false
+      "Apply a gaussian high pass filter to a 2D array",
+      py::arg("input"),
+      py::arg("kernel_size") = 7, 
+      py::arg("sigma") = 3,
+      py::arg("clip_at_zero") = false
    );
    m.def("_local_variance_normalization", 
       &local_variance_norm_wrapper, 
-      "Apply a local variance normalization filter to a 2D array"
-//      py::arg("kernel_size") = 3, 
-//      py::arg("sigma1") = 2,
-//      py::arg("sigma2") = 2,
-//      py::arg("clip_at_zero") = false
+      "Apply a local variance normalization filter to a 2D array",
+      py::arg("input"),
+      py::arg("kernel_size") = 7, 
+      py::arg("sigma1") = 2,
+      py::arg("sigma2") = 2,
+      py::arg("clip_at_zero") = false
    );
 }

@@ -1,10 +1,10 @@
 #include <cmath>
-#include <iostream>
-#include <vector>
 #include <iomanip>
 
 #include "lib/constants.h"
 #include "lib/kernels.h"
+
+//-------------CONVOLUTION KERNELS-------------//
 
 std::vector<float> kernels::gaussian(int kernel_size, float sigma)
 {
@@ -67,7 +67,7 @@ std::function<std::vector<float>(int, float)> kernels::get_kernel_type(int kerne
    }
 }
 
-float kernels::apply_kernel(
+float kernels::apply_conv_kernel(
    const float* input,
    const std::vector<float>& kernel,
    int row, int col, int step, 
@@ -86,3 +86,6 @@ float kernels::apply_kernel(
    }
    return sum;
 }
+
+//---------------SORTING KERNELS---------------//
+
